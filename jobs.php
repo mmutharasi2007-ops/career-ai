@@ -1,6 +1,6 @@
 <?php
 
-session_start();
+require_once "auth_session.php";
 include "db.php";
 
 if (!isset($_SESSION['user_id'])) {
