@@ -1,104 +1,56 @@
 <?php
+require_once "auth_session.php";
+require_once "db.php";
 
-session_start();
-
-include "db.php";
-
-
-/* =========================
-   ALREADY LOGGED IN
-========================= */
-
-if (isset($_SESSION['user_id'])) {
-
+if (!empty($_SESSION['user_id'])) {
     header("Location: dashboard.php");
-
     exit();
 }
 
-
 $message = "";
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
+    $name = trim($_POST['name'] ?? '');
+    $email = trim($_POST['email'] ?? '');
+    $password = $_POST['password'] ?? '';
+    $department = trim($_POST['department'] ?? '');
 
-/* =========================
-   REGISTER
-========================= */
-
-if (isset($_POST['register'])) {
-
-    $name = $_POST['name'];
-
-    $email = $_POST['email'];
-
-    $password = $_POST['password'];
-
-    $department = $_POST['department'];
-
-
-    /* =========================
-       CHECK EMAIL ALREADY EXISTS
-    ========================= */
-
-    $check_sql = "SELECT id FROM users WHERE email='$email'";
-
-    $check_result = $conn->query($check_sql);
-
-
-    if ($check_result->num_rows > 0) {
-
-        $message = "This email is already registered! Please Login.";
-
+    if ($name === '' || !filter_var($email, FILTER_VALIDATE_EMAIL) ||
+        $password === '' || $department === '') {
+        $message = "Please fill in all fields with valid details.";
+    } elseif (strlen($password) < 8) {
+        $message = "Password must contain at least 8 characters.";
     } else {
+        $check = $conn->prepare("SELECT id FROM users WHERE email = ?");
+        $check->bind_param("s", $email);
+        $check->execute();
+        $check->store_result();
 
-
-        /* =========================
-           INSERT NEW USER
-        ========================= */
-
-        $sql = "INSERT INTO users
-                (name, email, password, department)
-                VALUES
-                ('$name', '$email', '$password', '$department')";
-
-
-        if ($conn->query($sql)) {
-
-
-            /* =========================
-               GET NEW USER ID
-            ========================= */
-
-            $user_id = $conn->insert_id;
-
-
-            /* =========================
-               CREATE LOGIN SESSION
-            ========================= */
-
-            $_SESSION['user_id'] = $user_id;
-
-            $_SESSION['name'] = $name;
-
-
-            /* =========================
-               GO TO DASHBOARD
-            ========================= */
-
-            header("Location: dashboard.php");
-
-            exit();
-
-
+        if ($check->num_rows > 0) {
+            $message = "This email is already registered! Please login.";
+            $check->close();
         } else {
+            $check->close();
+            $passwordHash = password_hash($password, PASSWORD_DEFAULT);
+            $insert = $conn->prepare(
+                "INSERT INTO users (name, email, password, department) VALUES (?, ?, ?, ?)"
+            );
+            $insert->bind_param("ssss", $name, $email, $passwordHash, $department);
 
-            $message = "Registration failed!";
+            if ($insert->execute()) {
+                session_regenerate_id(true);
+                $_SESSION['user_id'] = $conn->insert_id;
+                $_SESSION['name'] = $name;
+                $insert->close();
+                header("Location: dashboard.php");
+                exit();
+            }
 
+            $message = "Registration failed. Please try again.";
+            $insert->close();
         }
-
     }
-
 }
-
 ?>
 
 
