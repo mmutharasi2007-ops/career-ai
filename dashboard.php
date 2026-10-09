@@ -1,12 +1,6 @@
 <?php
-
-session_start();
-
-if (!isset($_SESSION['user_id'])) {
-    header("Location: login.php");
-    exit();
-}
-
+require_once "auth_session.php";
+require_login();
 ?>
 
 <!DOCTYPE html>
@@ -131,7 +125,7 @@ if (!isset($_SESSION['user_id'])) {
 <section class="welcome">
 
     <h1>
-        Welcome, <?php echo $_SESSION['name']; ?>!
+        Welcome, <?php echo htmlspecialchars((string)($_SESSION['name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>!
     </h1>
 
     <p>
