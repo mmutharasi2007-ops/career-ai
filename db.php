@@ -16,7 +16,8 @@ if (is_file($localConfig)) {
 }
 
 if (!isset($servername, $username, $password, $database) ||
-    $username === '' || $password === '') {
+    !is_string($username) || $username === '' ||
+    !is_string($password) || $password === '') {
     error_log('Career AI database settings are missing.');
     http_response_code(500);
     exit('Database configuration is missing. Please configure db.local.php.');
