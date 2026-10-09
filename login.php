@@ -1,89 +1,59 @@
 <?php
+require_once "auth_session.php";
+require_once "db.php";
 
-session_start();
-
-include "db.php";
-
-
-/* =========================
-   ALREADY LOGGED IN
-========================= */
-
-if (isset($_SESSION['user_id'])) {
-
+if (!empty($_SESSION['user_id'])) {
     header("Location: dashboard.php");
-
     exit();
 }
 
-
 $message = "";
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
+    $email = trim($_POST['email'] ?? '');
+    $password = $_POST['password'] ?? '';
 
-/* =========================
-   LOGIN
-========================= */
-
-if (isset($_POST['login'])) {
-
-    $email = $_POST['email'];
-
-    $password = $_POST['password'];
-
-
-    /* =========================
-       CHECK EMAIL + PASSWORD
-    ========================= */
-
-    $sql = "SELECT * FROM users
-            WHERE email='$email'
-            AND password='$password'";
-
-
-    $result = $conn->query($sql);
-
-
-    if ($result->num_rows == 1) {
-
-
-        /* =========================
-           GET USER DETAILS
-        ========================= */
-
-        $user = $result->fetch_assoc();
-
-
-        /* =========================
-           CREATE LOGIN SESSION
-        ========================= */
-
-        $_SESSION['user_id'] = $user['id'];
-
-        $_SESSION['name'] = $user['name'];
-
-
-        /* =========================
-           LOGIN SUCCESS
-        ========================= */
-
-        header("Location: dashboard.php");
-
-        exit();
-
-
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL) || $password === '') {
+        $message = "Invalid email or password!";
     } else {
+        $stmt = $conn->prepare("SELECT id, name, password FROM users WHERE email = ? LIMIT 1");
+        $stmt->bind_param("s", $email);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $user = $result->fetch_assoc();
+        $stmt->close();
 
+        $validPassword = false;
+        if ($user) {
+            $storedPassword = (string)$user['password'];
+            if (password_verify($password, $storedPassword)) {
+                $validPassword = true;
+            } else {
+                // Temporary compatibility: upgrade an old plain-text password after a successful login.
+                $passwordInfo = password_get_info($storedPassword);
+                if (($passwordInfo['algo'] ?? null) === null &&
+                    hash_equals($storedPassword, $password)) {
+                    $validPassword = true;
+                    $newHash = password_hash($password, PASSWORD_DEFAULT);
+                    $upgrade = $conn->prepare("UPDATE users SET password = ? WHERE id = ?");
+                    $upgrade->bind_param("si", $newHash, $user['id']);
+                    $upgrade->execute();
+                    $upgrade->close();
+                }
+            }
+        }
 
-        /* =========================
-           LOGIN FAILED
-        ========================= */
+        if ($validPassword && $user) {
+            session_regenerate_id(true);
+            $_SESSION['user_id'] = (int)$user['id'];
+            $_SESSION['name'] = $user['name'];
+            header("Location: dashboard.php");
+            exit();
+        }
 
         $message = "Invalid email or password!";
-
     }
-
 }
-
 ?>
 
 
