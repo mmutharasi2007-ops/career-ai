@@ -2,7 +2,7 @@
 
 set_time_limit(150);
 
-session_start();
+require_once "auth_session.php";
 
 include "db.php";
 
